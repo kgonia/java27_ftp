@@ -6,73 +6,83 @@ import org.apache.ftpserver.FtpServer;
 import org.apache.ftpserver.FtpServerFactory;
 import org.apache.ftpserver.filesystem.nativefs.NativeFileSystemFactory;
 import org.apache.ftpserver.ftplet.FtpException;
+import org.apache.ftpserver.ftplet.User;
 import org.apache.ftpserver.ftplet.UserManager;
 import org.apache.ftpserver.listener.ListenerFactory;
 import org.apache.ftpserver.usermanager.PropertiesUserManagerFactory;
 import org.apache.ftpserver.usermanager.SaltedPasswordEncryptor;
+import org.apache.ftpserver.usermanager.UserManagerFactory;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.ftp.server.ApacheMinaFtplet;
-import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
-@Service
+@Configuration
 public class MySftpServer {
 
     private Log log = LogFactory.getLog(MySftpServer.class);
 
     private final ApacheMinaFtplet apacheMinaFtplet;
 
-    public MySftpServer(ApacheMinaFtplet apacheMinaFtplet) {
+    private final FtpServerProperties ftpServerProperties;
+
+    public MySftpServer(ApacheMinaFtplet apacheMinaFtplet, FtpServerProperties ftpServerProperties) {
         this.apacheMinaFtplet = apacheMinaFtplet;
+        this.ftpServerProperties = ftpServerProperties;
     }
 
-    @PostConstruct
-    public void startServer() throws FtpException {
-        start();
-    }
-
-    private void start() throws FtpException {
-
-        FtpServerFactory serverFactory = new FtpServerFactory();
-        ListenerFactory factory = new ListenerFactory();
-
-        // set the port of the listener
-        factory.setPort(2221);
-
-            // replace the default listener
-        serverFactory.addListener("default", factory.createListener());
-        serverFactory.setFtplets(new HashMap<>(Collections.singletonMap("springFtplet", apacheMinaFtplet)));
-
-        PropertiesUserManagerFactory userManagerFactory = new PropertiesUserManagerFactory();
-//        userManagerFactory.setFile(new File("myusers.properties"));
-        userManagerFactory.setPasswordEncryptor(new SaltedPasswordEncryptor());
-        UserManager um = userManagerFactory.createUserManager();
+    @Bean
+    public BaseUser user(){
         BaseUser user = new BaseUser();
         user.setName("user");
         user.setPassword("secret");
         user.setHomeDirectory("ftproot");
+        return user;
+    }
+
+    @Bean
+    public UserManager userManager(BaseUser user) throws FtpException {
+        PropertiesUserManagerFactory userManagerFactory = new PropertiesUserManagerFactory();
+//        userManagerFactory.setFile(new File("myusers.properties"));
+        userManagerFactory.setPasswordEncryptor(new SaltedPasswordEncryptor());
+        UserManager um = userManagerFactory.createUserManager();
 
         WritePermission writePermission = new WritePermission();
         user.setAuthorities(List.of(writePermission));
 
         um.save(user);
+        return um;
+    }
 
-        serverFactory.setUserManager(um);
-
+    @Bean
+    public NativeFileSystemFactory nativeFileSystemFactory(BaseUser user) throws FtpException {
         NativeFileSystemFactory nativeFileSystemFactory = new NativeFileSystemFactory();
         nativeFileSystemFactory.setCreateHome(true);
         nativeFileSystemFactory.createFileSystemView(user);
+        return nativeFileSystemFactory;
+    }
 
+    @Bean
+    public FtpServer ftpServer(UserManager userManager, NativeFileSystemFactory nativeFileSystemFactory) throws FtpException {
+        FtpServerFactory serverFactory = new FtpServerFactory();
+        ListenerFactory factory = new ListenerFactory();
+
+        // set the port of the listener
+        factory.setPort(ftpServerProperties.getPort());
+
+        // replace the default listener
+        serverFactory.addListener("default", factory.createListener());
+        serverFactory.setFtplets(new HashMap<>(Collections.singletonMap("springFtplet", apacheMinaFtplet)));
+
+        serverFactory.setUserManager(userManager);
         serverFactory.setFileSystem(nativeFileSystemFactory);
 
-        // start the server
-        FtpServer server = serverFactory.createServer();
-        server.start();
-
-   }
+        return serverFactory.createServer();
+    }
 }

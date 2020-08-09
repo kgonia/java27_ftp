@@ -4,6 +4,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.event.inbound.ApplicationEventListeningMessageProducer;
@@ -12,6 +13,7 @@ import org.springframework.integration.ftp.server.ApacheMinaFtplet;
 import org.springframework.messaging.MessageChannel;
 
 @SpringBootApplication
+@EnableConfigurationProperties(value = FtpServerProperties.class)
 public class JavaSftpserverApplication {
 
 	private Log log = LogFactory.getLog(JavaSftpserverApplication.class);
